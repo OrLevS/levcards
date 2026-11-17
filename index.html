@@ -207,6 +207,22 @@ h2{font-family:var(--display);font-weight:400}
 :root[data-theme="dark"] .face.f-ans{background:var(--cream);color:var(--navy);border-color:var(--cream)}
 .opt.sel.right,.tq .opt.right{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 20%,var(--card))}
 .opt.sel.wrong{border-color:var(--coral);background:color-mix(in srgb,var(--coral) 16%,var(--card))}
+/* progress + focus choice on the set page */
+.focus{display:grid;gap:8px;background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.focus b{font-family:var(--plain);font-weight:600;font-size:17px}
+.focus .seg button:disabled{opacity:.45;cursor:default}
+.allknown{margin:0;color:var(--teal);font-size:16px}
+.sethead .prog{margin-top:10px}
+.cardlist li{grid-template-columns:auto minmax(0,1fr) minmax(0,1.4fr) auto auto}
+.cardlist .wr{font-family:var(--plain);font-size:14px;color:var(--coral);white-space:nowrap;min-width:2.4em;text-align:center}
+.cardlist.known li{opacity:.85}
+@media (max-width:520px){.cardlist li{grid-template-columns:auto minmax(0,1fr) auto auto}.cardlist .d{grid-column:2/3;grid-row:2}}
+.homehead .course{margin:2px 0 0;font-family:var(--plain);font-size:16px;color:var(--teal);font-weight:600}
+/* fill-in-the-blank */
+.qtext.gap{font-family:var(--plain);font-weight:500;line-height:1.5}
+.qtext.gap .blank{display:inline-block;min-width:3.4em;border-bottom:3px solid var(--coral);margin:0 .15em;height:1.1em;vertical-align:baseline}
+.fb .filled{font-family:var(--plain);font-size:17px}
+.fb .filled b{color:var(--teal)}
 
 /* ---------- games: shared ---------- */
 .g-intro .g-how{margin:0;font-size:19px;max-width:46ch;line-height:1.45}
@@ -316,7 +332,7 @@ h2{font-family:var(--display);font-weight:400}
 </head>
 <body>
 <div id="app"></div>
-<script>window.LC_CFG = {"url":"https://swfgkaesxhixrmvfmofx.supabase.co","key":"sb_publishable_vVNMWTtYYGnwBwFKKPjbPQ_DVVtUjyG"};</script>
+<script>window.LC_CFG = {"course":"g7","label":null,"url":"https://swfgkaesxhixrmvfmofx.supabase.co","key":"sb_publishable_vVNMWTtYYGnwBwFKKPjbPQ_DVVtUjyG"};</script>
 <script>
 // Interface strings. Hebrew and Arabic address the learner in plural (gender-neutral), Russian uses "ты".
 // Arabic is spoken Jerusalem dialect, written in Arabic script. Russian and Arabic still need a native speaker's check.
@@ -524,18 +540,48 @@ Object.assign(LC.STR.ar, {
 });
 
 ;
+// ---- src/i18n/progress.js
+// Strings for "what I know" on the set page and for fill-in-the-blank questions.
+Object.assign(LC.STR.he, {
+  whatToPractise: 'מה לתרגל?', focusAll: 'את כל הקבוצה ({n})', focusWeak: 'רק מה שעוד לא יודעים ({n})',
+  allKnown: 'יודעים את כל המילים בקבוצה! אפשר לחזור על הכול כדי לא לשכוח.',
+  stillLearning: 'עוד לומדים', knownWords: 'כבר יודעים', wrongN: 'טעיתם {n} פעמים',
+  gapChoose: 'השלימו את המשפט: בחרו מילה', gapType: 'השלימו את המשפט: כתבו את המילה',
+});
+Object.assign(LC.STR.en, {
+  whatToPractise: 'What to practise?', focusAll: 'The whole set ({n})', focusWeak: "Only what I don't know yet ({n})",
+  allKnown: 'You know every word in this set! Review it all so you don’t forget.',
+  stillLearning: 'Still learning', knownWords: 'Already known', wrongN: 'Wrong {n} times',
+  gapChoose: 'Complete the sentence: choose a word', gapType: 'Complete the sentence: type the word',
+});
+Object.assign(LC.STR.ru, {
+  whatToPractise: 'Что тренировать?', focusAll: 'Весь набор ({n})', focusWeak: 'Только то, что ещё не знаю ({n})',
+  allKnown: 'Ты знаешь все слова в наборе! Повтори всё, чтобы не забыть.',
+  stillLearning: 'Ещё учу', knownWords: 'Уже знаю', wrongN: 'Ошибок: {n}',
+  gapChoose: 'Вставь слово: выбери', gapType: 'Вставь слово: напиши его',
+});
+Object.assign(LC.STR.ar, {
+  whatToPractise: 'شو بدكم تتدرّبوا؟', focusAll: 'كل المجموعة ({n})', focusWeak: 'بس اللي لسا مش عارفينه ({n})',
+  allKnown: 'بتعرفوا كل كلمات المجموعة! راجعوا كل إشي عشان ما تنسوا.',
+  stillLearning: 'لسا بنتعلّمها', knownWords: 'بنعرفها', wrongN: 'غلطتوا {n} مرّات',
+  gapChoose: 'كمّلوا الجملة: اختاروا كلمة', gapType: 'كمّلوا الجملة: اكتبوا الكلمة',
+});
+
+;
 // LevCards core: storage, identity, logging to Supabase, sets, router, shell screens, mode host.
 // Modes register themselves in LC.modes[name] = { kind: 'study'|'game', min: <cards needed>, mount(root, ctx) }.
 (function () {
   const LC = window.LC;
   const CFG = window.LC_CFG || {};
+  const BASE_TITLE = document.title || 'LevCards';
   LC.modes = LC.modes || {};
 
-  /* ---------- storage (never trusted to exist) ---------- */
+  /* ---------- storage (never trusted to exist); each class site keeps its own keys ---------- */
+  const NS = 'lc.' + (CFG.course && CFG.course !== 'g7' ? CFG.course + '.' : '');
   const store = {
-    get(k, d) { try { const v = localStorage.getItem('lc.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem('lc.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
-    del(k) { try { localStorage.removeItem('lc.' + k); } catch (e) { /* ignore */ } },
+    get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(NS + k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
+    del(k) { try { localStorage.removeItem(NS + k); } catch (e) { /* ignore */ } },
   };
   LC.store = store;
   LC.lang = store.get('lang', null);
@@ -605,6 +651,17 @@ Object.assign(LC.STR.ar, {
     for (const b of LC.accepts(answer)) if (lev(a, b) === 1 && b.length >= 3) return true;
     return false;
   };
+  // Fill-in-the-blank sentences for a card: its own `gaps` (written with ___ and a hint),
+  // else its example sentence with the word blanked out.
+  LC.gapsOf = (c) => {
+    if (Array.isArray(c.gaps) && c.gaps.length) return c.gaps;
+    if (!c.ex) return [];
+    for (const a of String(c.term).replace(/\([^)]*\)/g, '').split('/').map((x) => x.trim()).filter(Boolean)) {
+      const re = new RegExp('(^|[^A-Za-z])' + a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z])', 'i');
+      if (re.test(c.ex)) return [c.ex.replace(re, (m, p) => p + '___')];
+    }
+    return [];
+  };
   function lev(a, b) {
     if (Math.abs(a.length - b.length) > 1) return 9;
     const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
@@ -638,7 +695,7 @@ Object.assign(LC.STR.ar, {
     if (!LC.me) return;
     const cur = LC.cur || {};
     queue.push({
-      created_at: new Date().toISOString(), student: LC.studentName(), device: LC.device, lang: LC.lang,
+      created_at: new Date().toISOString(), student: LC.studentName(), device: LC.device, lang: LC.lang, course: CFG.course || 'g7',
       set_id: (extra && 'set' in extra) ? extra.set : (cur.set ? cur.set.id : null),
       mode: (extra && 'mode' in extra) ? extra.mode : (cur.mode || null),
       kind, data: data || {},
@@ -695,11 +752,22 @@ Object.assign(LC.STR.ar, {
     return api;
   };
 
+  // how many times each card was answered wrong on this device
+  LC.wrongs = (setId) => store.get('w.' + setId, {});
+  LC.addWrong = (setId, id) => { const w = LC.wrongs(setId); w[id] = (w[id] || 0) + 1; store.set('w.' + setId, w); };
+  // which cards to practise: the whole set, or only the ones not known yet
+  LC.focus = (setId) => store.get('focus.' + setId, 'all');
+  LC.practiceCards = (set) => {
+    const m = LC.mastery(set.id);
+    const weak = set.cards.filter((c) => m.get(c.id) < 2);
+    return LC.focus(set.id) === 'weak' && weak.length ? weak : set.cards;
+  };
+
   /* ---------- sets ---------- */
   LC.sets = store.get('sets', []);
   LC.loadSets = async () => {
     if (!CFG.url) return LC.sets;
-    const r = await fetch(CFG.url + '/rest/v1/study_sets?select=id,title,term_lang,cards,sort,updated_at&published=eq.true&order=sort.asc,created_at.asc', {
+    const r = await fetch(CFG.url + '/rest/v1/study_sets?select=id,title,term_lang,cards,sort,updated_at&published=eq.true&course=eq.' + encodeURIComponent(CFG.course || 'g7') + '&order=sort.asc,created_at.asc', {
       headers: { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key },
     });
     if (!r.ok) throw new Error('sets ' + r.status);
@@ -772,7 +840,8 @@ Object.assign(LC.STR.ar, {
 
   async function homeScreen() {
     const list = h('div.setlist', h('p.muted', LC.t('loading')));
-    frame(h('section.homehead', h('h1', LC.t('hi', { name: LC.me.first })), h('h2.sub', LC.t('sets'))), list);
+    const label = CFG.label ? (CFG.label[LC.lang] || CFG.label.he) : null;
+    frame(h('section.homehead', h('h1', LC.t('hi', { name: LC.me.first })), label ? h('p.course', label) : null, h('h2.sub', LC.t('sets'))), list);
     const draw = () => {
       if (!LC.sets.length) { list.replaceChildren(h('p.muted', LC.t('noSets'))); return; }
       list.replaceChildren(...LC.sets.map((s, i) => {
@@ -801,28 +870,44 @@ Object.assign(LC.STR.ar, {
     LC.log('open', {}, { set: set.id, mode: null });
     const m = LC.mastery(set.id), cnt = m.counts(set.cards);
     const aw = LC.answerWith(set.id);
+    const wr = LC.wrongs(set.id);
+    const weak = set.cards.filter((c) => m.get(c.id) < 2);
+    const known = set.cards.filter((c) => m.get(c.id) >= 2);
+    const focus = weak.length ? LC.focus(set.id) : 'all';
+    const practise = LC.practiceCards(set);
     const tile = (k) => {
       const mod = LC.modes[k]; if (!mod) return null;
-      const short = set.cards.length < (mod.min || 1);
+      const short = practise.length < (mod.min || 1);
       return h('a.tile' + (short ? '.off' : ''), { href: short ? null : '#/set/' + set.id + '/' + k, 'aria-disabled': short ? 'true' : null, title: short ? LC.t('tooFew', { n: mod.min }) : null },
         h('span.ic', { 'aria-hidden': 'true' }, ICON[k]), h('b', LC.t('m_' + k)), h('small', short ? LC.t('tooFew', { n: mod.min }) : LC.t('d_' + k)));
     };
     const awSel = h('div.seg', { role: 'group', 'aria-label': LC.t('answerWith') },
       h('span', LC.t('answerWith')),
       ...['term', 'def'].map((v) => h('button', { type: 'button', 'aria-pressed': String(aw === v), onclick: () => { store.set('aw.' + set.id, v); setScreen(set); } }, LC.t(v === 'term' ? 'withTerm' : 'withDef'))));
-    const list = h('ul.cardlist', set.cards.map((c) => h('li',
+    const row = (c) => h('li',
       h('span.lv.lv' + m.get(c.id), { title: LC.t('lv' + m.get(c.id)) }),
       h('span.t', { lang: set.term_lang || 'en', dir: 'auto' }, c.term),
       h('span.d', { dir: 'auto' }, LC.def(c)),
-      LC.canSpeak ? h('button.say', { type: 'button', 'aria-label': LC.t('listen'), onclick: () => LC.speak(c.term, set.term_lang || 'en') }, '🔊') : null)));
+      h('span.wr', wr[c.id] ? { title: LC.t('wrongN', { n: wr[c.id] }) } : { 'aria-hidden': 'true' }, wr[c.id] ? '✗ ' + wr[c.id] : ''),
+      LC.canSpeak ? h('button.say', { type: 'button', 'aria-label': LC.t('listen'), onclick: () => LC.speak(c.term, set.term_lang || 'en') }, '🔊') : null);
+    // words still being learned first, the ones answered wrong most at the top
+    const weakSorted = weak.slice().sort((a, b) => (wr[b.id] || 0) - (wr[a.id] || 0) || m.get(a.id) - m.get(b.id));
+    const focusSel = h('div.focus', { role: 'group', 'aria-label': LC.t('whatToPractise') },
+      h('b', LC.t('whatToPractise')),
+      h('div.seg',
+        h('button', { type: 'button', 'aria-pressed': String(focus === 'all'), onclick: () => { store.set('focus.' + set.id, 'all'); setScreen(set); } }, LC.t('focusAll', { n: set.cards.length })),
+        h('button', { type: 'button', 'aria-pressed': String(focus === 'weak'), disabled: !weak.length, onclick: () => { store.set('focus.' + set.id, 'weak'); setScreen(set); } }, LC.t('focusWeak', { n: weak.length }))),
+      !weak.length ? h('p.allknown', LC.t('allKnown')) : null);
     frame(
       h('a.back', { href: '#/' }, LC.t('back')),
       h('section.sethead', h('h1', LC.setTitle(set)),
-        h('div.levels', [0, 1, 2].map((i) => h('span.lvpill.lv' + i, LC.t('lv' + i) + ' ' + cnt[i])))),
-      awSel,
+        h('div.levels', [0, 1, 2].map((i) => h('span.lvpill.lv' + i, LC.t('lv' + i) + ' ' + cnt[i]))),
+        LC.ui.progress(cnt[2], set.cards.length)),
+      focusSel, awSel,
       h('h2.sec', LC.t('practice')), h('div.tiles', ORDER.study.map(tile)),
       h('h2.sec', LC.t('games')), h('div.tiles', ORDER.game.map(tile)),
-      h('h2.sec', LC.t('allCards')), list);
+      weak.length ? [h('h2.sec', LC.t('stillLearning') + ' (' + weak.length + ')'), h('ul.cardlist', weakSorted.map(row))] : null,
+      known.length ? [h('h2.sec', LC.t('knownWords') + ' (' + known.length + ')'), h('ul.cardlist.known', known.map(row))] : null);
   }
 
   /* ---------- mode host ---------- */
@@ -840,7 +925,8 @@ Object.assign(LC.STR.ar, {
     const aw = LC.answerWith(set.id);
     const termLang = set.term_lang || 'en';
     const ctx = {
-      set, cards: set.cards.slice(), lang: LC.lang, termLang, h, t: LC.t, root,
+      // the cards to practise (whole set, or only the ones not known yet); distractors still come from the whole set
+      set, cards: LC.practiceCards(set).slice(), lang: LC.lang, termLang, h, t: LC.t, root,
       term: LC.term, def: LC.def,
       answerWith: aw,
       // what the learner sees, and what they must produce
@@ -859,10 +945,24 @@ Object.assign(LC.STR.ar, {
         for (const o of LC.shuffle(set.cards)) { if (out.length >= n) break; const a = ctx.answer(o); const k = LC.norm(a); if (!seen.has(k)) { seen.add(k); out.push(a); } }
         return LC.shuffle(out);
       },
+      // n English words as options for a fill-in-the-blank, the right one included
+      termOptions(c, n) {
+        const seen = new Set([LC.norm(c.term)]); const out = [c.term];
+        for (const o of LC.shuffle(set.cards)) { if (out.length >= n) break; const k = LC.norm(o.term); if (!seen.has(k)) { seen.add(k); out.push(o.term); } }
+        return LC.shuffle(out);
+      },
+      gaps: LC.gapsOf,
       mastery: LC.mastery(set.id),
       log: (kind, data) => LC.log(kind, data, { set: set.id, mode: name }),
-      // per-answer record for the teacher: card id, right/wrong, question type, what they typed/chose
-      answered: (c, ok, q, given) => LC.log('ans', { c: c.id, ok: !!ok, q, a: given == null ? undefined : String(given).slice(0, 60) }, { set: set.id, mode: name }),
+      // per-answer record for the teacher (card id, right/wrong, question type, what they typed/chose),
+      // plus the learner's own record: a wrong answer is counted and a "known" card goes back to "still learning".
+      // Study modes then set the level they want; games only move a new card up to "familiar".
+      answered(c, ok, q, given) {
+        LC.log('ans', { c: c.id, ok: !!ok, q, a: given == null ? undefined : String(given).slice(0, 60) }, { set: set.id, mode: name });
+        const M = ctx.mastery;
+        if (!ok) { LC.addWrong(set.id, c.id); if (M.get(c.id) > 1) M.set(c.id, 1); }
+        else if (mod.kind === 'game' && M.get(c.id) === 0) M.set(c.id, 1);
+      },
       where: (p) => { if (LC.cur) LC.cur.where = p; },
       finish(result) { LC.log('finish', Object.assign({ ms: Date.now() - started }, result || {}), { set: set.id, mode: name }); flush(); },
       best: {
@@ -901,7 +1001,7 @@ Object.assign(LC.STR.ar, {
   async function route() {
     teardown();
     applyLang();
-    document.title = 'LevCards';
+    document.title = BASE_TITLE;
     if (!LC.lang) return langScreen();
     if (!LC.me) return loginScreen();
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -910,7 +1010,7 @@ Object.assign(LC.STR.ar, {
       let set = findSet(parts[1]);
       if (!set) { try { await LC.loadSets(); } catch (e) { /* offline */ } set = findSet(parts[1]); }
       if (!set) { location.hash = '#/'; return; }
-      document.title = LC.setTitle(set) + ' · LevCards';
+      document.title = LC.setTitle(set) + ' · ' + BASE_TITLE;
       return parts[2] ? modeScreen(set, parts[2]) : setScreen(set);
     }
     return homeScreen();
@@ -923,6 +1023,7 @@ Object.assign(LC.STR.ar, {
 ;
 // ---- src/modes/00-q.js
 // Shared question widgets for the study modes: multiple choice and typed answer, with feedback.
+// Every widget takes an optional `gap` sentence: then it is a fill-in-the-blank and the answer is always the English word.
 // onDone(ok, how) is called once the learner moves on. how: 'auto' | 'next' | 'override'.
 (function () {
   const LC = window.LC;
@@ -931,7 +1032,18 @@ Object.assign(LC.STR.ar, {
     // one keyboard dispatcher per mode; each new question replaces the handler
     bindKeys(ctx) { LC.q.key = null; ctx.on(window, 'keydown', (e) => { if (LC.q.key) LC.q.key(e); }); ctx.onCleanup(() => { LC.q.key = null; }); },
 
-    promptEl(ctx, c, label) {
+    // a random fill-in-the-blank sentence for this card, or null
+    gapFor(ctx, c) { const g = ctx.gaps(c); return g.length ? LC.pick(g) : null; },
+
+    gapEl(sentence, termLang) {
+      const parts = String(sentence).split(/_{2,}/);
+      const out = h('div.qtext.gap', { lang: termLang || 'en', dir: 'ltr' });
+      parts.forEach((p, i) => { out.append(p); if (i < parts.length - 1) out.append(h('span.blank', { 'aria-label': 'blank' })); });
+      return out;
+    },
+
+    promptEl(ctx, c, label, gap) {
+      if (gap) return [h('div.qlabel', h('span', label)), LC.q.gapEl(gap, ctx.termLang)];
       const isTerm = ctx.promptIsTerm;
       const text = ctx.prompt(c);
       return [
@@ -941,24 +1053,31 @@ Object.assign(LC.STR.ar, {
     },
 
     feedback(ctx, c, ok, opts) {
-      const ans = ctx.answer(c);
+      const gap = opts.gap;
+      const ans = gap ? c.term : ctx.answer(c);
+      const termAnswer = gap || ctx.answerWith === 'term';
       const box = h('div.fb.' + (ok ? 'ok' : 'no'), { role: 'status' });
+      // for a blank, show the whole sentence with the word in place
+      const filled = gap ? h('span.filled', { lang: ctx.termLang, dir: 'ltr' }, ...String(gap).split(/_{2,}/).flatMap((p, i, a) => (i < a.length - 1 ? [p, h('b', c.term.replace(/\s*\([^)]*\)/g, '').split('/')[0].trim())] : [p]))) : null;
       if (ok) {
         box.append(h('b', LC.pick(LC.t('praise'))));
-        if (opts.showAnswer) box.append(h('span.ans', { dir: 'auto' }, ans));
+        if (filled) box.append(filled);
       } else {
-        box.append(h('b', opts.near ? '≈ ' + LC.t('notYet') : LC.t('notYet')), h('span.ans', { dir: 'auto' }, ans, ctx.answerWith === 'term' ? LC.ui.sayBtn(c.term, ctx.termLang) : null));
-        if (c.ex && ctx.answerWith === 'term') box.append(h('span', { dir: 'ltr', lang: 'en', style: { fontFamily: 'var(--plain)', fontSize: '16px', opacity: '.8' } }, c.ex));
+        box.append(h('b', opts.near ? '≈ ' + LC.t('notYet') : LC.t('notYet')), h('span.ans', { dir: 'auto' }, ans, termAnswer ? LC.ui.sayBtn(c.term, ctx.termLang) : null));
+        if (filled) box.append(filled);
+        else if (c.ex && ctx.answerWith === 'term') box.append(h('span', { dir: 'ltr', lang: 'en', style: { fontFamily: 'var(--plain)', fontSize: '16px', opacity: '.8' } }, c.ex));
+        if (gap || ctx.answerWith === 'term') box.append(h('span', { dir: 'auto', style: { fontSize: '16px' } }, '= ' + LC.def(c)));
         if (opts.given != null && opts.given !== '') box.append(h('span', LC.t('youWrote') + ' ', h('span', { dir: 'auto', style: { textDecoration: 'line-through' } }, opts.given)));
       }
       return box;
     },
 
-    mc(ctx, c, label, onDone) {
-      const n = Math.min(4, new Set(ctx.cards.map((x) => LC.norm(ctx.answer(x)))).size);
-      const opts = ctx.options(c, n);
-      const right = LC.norm(ctx.answer(c));
-      const card = h('section.qcard', LC.q.promptEl(ctx, c, label));
+    mc(ctx, c, label, onDone, gap) {
+      const pool = gap ? ctx.set.cards.map((x) => LC.norm(x.term)) : ctx.set.cards.map((x) => LC.norm(ctx.answer(x)));
+      const n = Math.min(4, new Set(pool).size);
+      const opts = gap ? ctx.termOptions(c, n) : ctx.options(c, n);
+      const right = LC.norm(gap ? c.term : ctx.answer(c));
+      const card = h('section.qcard', LC.q.promptEl(ctx, c, label, gap));
       const grid = h('div.opts');
       let picked = false;
       const choose = (btn, val) => {
@@ -966,26 +1085,23 @@ Object.assign(LC.STR.ar, {
         const ok = LC.norm(val) === right;
         [...grid.children].forEach((b) => { b.disabled = true; if (LC.norm(b.dataset.v) === right) b.classList.add('right'); });
         if (!ok) btn.classList.add('wrong');
-        ctx.answered(c, ok, 'mc', val);
-        finish(ok, val);
+        ctx.answered(c, ok, gap ? 'gap-mc' : 'mc', val);
+        const fb = LC.q.feedback(ctx, c, ok, { gap });
+        card.append(fb);
+        LC.q.continueOn(ctx, card, fb, ok, onDone, false);
       };
       opts.forEach((o, i) => {
-        const b = h('button.opt', { type: 'button', 'data-v': o, onclick: () => choose(b, o) }, h('span.k', String(i + 1)), h('span', { dir: 'auto' }, o));
+        const b = h('button.opt', { type: 'button', 'data-v': o, onclick: () => choose(b, o) }, h('span.k', String(i + 1)), h('span', gap ? { lang: ctx.termLang, dir: 'ltr' } : { dir: 'auto' }, o));
         grid.append(b);
       });
       card.append(grid);
       LC.q.key = (e) => { const k = +e.key; if (k >= 1 && k <= opts.length) { e.preventDefault(); grid.children[k - 1].click(); } };
-      function finish(ok) {
-        const fb = LC.q.feedback(ctx, c, ok, {});
-        card.append(fb);
-        LC.q.continueOn(ctx, card, fb, ok, onDone, false);
-      }
       return card;
     },
 
-    typed(ctx, c, label, onDone) {
-      const card = h('section.qcard', LC.q.promptEl(ctx, c, label));
-      const input = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: false, dir: 'auto', 'aria-label': LC.t('typeIt'), placeholder: LC.t('typeIt') });
+    typed(ctx, c, label, onDone, gap) {
+      const card = h('section.qcard', LC.q.promptEl(ctx, c, label, gap));
+      const input = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: false, dir: gap ? 'ltr' : 'auto', lang: gap ? ctx.termLang : null, 'aria-label': LC.t('typeIt'), placeholder: LC.t('typeIt') });
       const checkBtn = h('button.btn.primary', { type: 'submit' }, LC.t('check'));
       const dk = h('button.btn.ghost', { type: 'button', onclick: () => submit(true) }, LC.t('dontKnow'));
       const form = h('form.typein', { onsubmit: (e) => { e.preventDefault(); submit(false); } }, input, checkBtn, dk);
@@ -997,11 +1113,12 @@ Object.assign(LC.STR.ar, {
         const given = gaveUp ? '' : input.value;
         if (!gaveUp && !given.trim()) { input.focus(); card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake'); return; }
         done = true;
-        const ok = !gaveUp && ctx.isRight(given, c);
+        const ok = !gaveUp && (gap ? LC.isRight(given, c.term) : ctx.isRight(given, c));
+        const near = !ok && !gaveUp && (gap ? LC.near(given, c.term) : ctx.near(given, c));
         input.disabled = true; checkBtn.disabled = true; dk.disabled = true;
         input.classList.add(ok ? 'right' : 'wrong');
-        ctx.answered(c, ok, 'write', gaveUp ? '' : given);
-        const fb = LC.q.feedback(ctx, c, ok, { given: gaveUp ? null : given, near: !ok && ctx.near(given, c) });
+        ctx.answered(c, ok, gap ? 'gap-write' : 'write', gaveUp ? '' : given);
+        const fb = LC.q.feedback(ctx, c, ok, { given: gaveUp ? null : given, near, gap });
         card.append(fb);
         LC.q.continueOn(ctx, card, fb, ok, onDone, !ok && !gaveUp);
       }
@@ -1013,7 +1130,7 @@ Object.assign(LC.STR.ar, {
     continueOn(ctx, card, fb, ok, onDone, canOverride) {
       let gone = false;
       const go = (how) => { if (gone) return; gone = true; LC.q.key = null; onDone(how === 'override' ? true : ok, how); };
-      if (ok) { ctx.later(() => go('auto'), 1000); LC.q.key = (e) => { if (e.key === 'Enter') { e.preventDefault(); go('auto'); } }; return; }
+      if (ok) { ctx.later(() => go('auto'), 1200); LC.q.key = (e) => { if (e.key === 'Enter') { e.preventDefault(); go('auto'); } }; return; }
       const row = h('div.row');
       if (canOverride) row.append(h('button.btn.ghost', { type: 'button', onclick: () => go('override') }, LC.t('override')));
       const nx = h('button.btn.primary', { type: 'button', onclick: () => go('next') }, LC.t('next'));
@@ -1164,8 +1281,10 @@ Object.assign(LC.STR.ar, {
         const c = queue.shift();
         const lvl = M.get(c.id);
         const typed = lvl >= 1 || uniqueAnswers < 2;
-        const label = typed ? LC.t('typeIt') : LC.t('choose');
-        const q = typed ? LC.q.typed(ctx, c, label, done) : LC.q.mc(ctx, c, label, done);
+        // about half the questions on a card with a sentence are fill-in-the-blank
+        const gap = Math.random() < 0.5 ? LC.q.gapFor(ctx, c) : null;
+        const label = gap ? LC.t(typed ? 'gapType' : 'gapChoose') : typed ? LC.t('typeIt') : LC.t('choose');
+        const q = typed ? LC.q.typed(ctx, c, label, done, gap) : LC.q.mc(ctx, c, label, done, gap);
         root.replaceChildren(...head(), q);
         function done(ok) {
           asked++;
@@ -1240,8 +1359,14 @@ Object.assign(LC.STR.ar, {
         const blockSize = count >= 8 ? 4 : count >= 6 ? 3 : 0;
         const block = uniq >= 3 ? picked.slice(count - blockSize) : [];
         const rest = picked.slice(0, count - block.length);
-        const kinds = uniq >= 2 ? ['write', 'mc', 'tf'] : ['write'];
-        const items = rest.map((c, i) => ({ c, kind: kinds[i % kinds.length] }));
+        // mixed question types; fill-in-the-blank only for cards that have a sentence
+        const kinds = uniq >= 2 ? ['write', 'gapmc', 'mc', 'gap', 'tf'] : ['write', 'gap'];
+        const items = rest.map((c, i) => {
+          let kind = kinds[i % kinds.length];
+          const gap = kind.startsWith('gap') ? LC.q.gapFor(ctx, c) : null;
+          if (kind.startsWith('gap') && !gap) kind = kind === 'gap' ? 'write' : 'mc';
+          return { c, kind, gap };
+        });
         LC.shuffle(items).forEach((it, i) => { items[i] = it; });
         const qs = [];
         const page = h('div.mode');
@@ -1260,9 +1385,23 @@ Object.assign(LC.STR.ar, {
         return ctx.promptIsTerm ? h('span', LC.ui.termEl(c, ctx.termLang), LC.ui.sayBtn(c.term, ctx.termLang)) : h('span', { dir: 'auto' }, ctx.prompt(c));
       }
 
-      function make({ c, kind }, num) {
-        const el = h('section.tq', h('span.num', num + ' · ' + LC.t(kind === 'write' ? 'typeIt' : kind === 'mc' ? 'choose' : 'tf')));
+      function make({ c, kind, gap }, num) {
+        const el = h('section.tq', h('span.num', num + ' · ' + LC.t({ write: 'typeIt', mc: 'choose', tf: 'tf', gap: 'gapType', gapmc: 'gapChoose' }[kind])));
         const right = ctx.answer(c);
+        if (kind === 'gap') {
+          const input = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: false, dir: 'ltr', lang: ctx.termLang, 'aria-label': LC.t('typeIt') });
+          el.append(LC.q.gapEl(gap, ctx.termLang), h('div.typein', input));
+          return { el, answeredCount: () => (input.value.trim() ? 1 : 0), total: 1,
+            grade() { input.disabled = true; const ok = LC.isRight(input.value, c.term); ctx.answered(c, ok, 'test-gap', input.value); return { ok: ok ? 1 : 0, review: [[c, input.value, ok, c.term]] }; } };
+        }
+        if (kind === 'gapmc') {
+          const opts = ctx.termOptions(c, Math.min(4, new Set(ctx.set.cards.map((x) => LC.norm(x.term))).size));
+          let val = null;
+          const grid = h('div.opts', opts.map((o, i) => { const b = h('button.opt', { type: 'button', 'data-v': o, onclick: () => { val = o; [...grid.children].forEach((x) => x.classList.toggle('sel', x === b)); } }, h('span.k', String(i + 1)), h('span', { lang: ctx.termLang, dir: 'ltr' }, o)); return b; }));
+          el.append(LC.q.gapEl(gap, ctx.termLang), grid);
+          return { el, answeredCount: () => (val != null ? 1 : 0), total: 1,
+            grade() { const ok = val != null && LC.norm(val) === LC.norm(c.term); [...grid.children].forEach((b) => { b.disabled = true; if (LC.norm(b.dataset.v) === LC.norm(c.term)) b.classList.add('right'); else if (b.dataset.v === val) b.classList.add('wrong'); }); ctx.answered(c, ok, 'test-gapmc', val); return { ok: ok ? 1 : 0, review: [[c, val, ok, c.term]] }; } };
+        }
         if (kind === 'write') {
           const input = h('input', { type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: false, dir: 'auto', 'aria-label': LC.t('typeIt') });
           el.append(h('div.qtext', promptNode(c)), h('div.typein', input));
@@ -1312,10 +1451,10 @@ Object.assign(LC.STR.ar, {
           const r = q.grade(); score += r.ok;
           q.el.classList.add(r.ok === q.total ? 'right' : 'wrong');
           const rev = h('div.review');
-          r.review.forEach(([c, given, ok]) => {
+          r.review.forEach(([c, given, ok, expected]) => {
             if (ok) return;
             const M = ctx.mastery; M.set(c.id, Math.min(M.get(c.id), 1)); wrong.push(c.id);
-            rev.append(h('span.w', LC.t('yourAns') + ' ', h('span', { dir: 'auto' }, given ? given : LC.t('noAns'))), h('span.r', LC.t('rightAns') + ' ', h('b', { dir: 'auto' }, ctx.answer(c))));
+            rev.append(h('span.w', LC.t('yourAns') + ' ', h('span', { dir: 'auto' }, given ? given : LC.t('noAns'))), h('span.r', LC.t('rightAns') + ' ', h('b', { dir: 'auto' }, expected || ctx.answer(c))));
           });
           r.review.forEach(([c, , ok]) => { if (ok) ctx.mastery.set(c.id, Math.max(ctx.mastery.get(c.id), 1)); });
           if (rev.children.length) q.el.append(rev);
@@ -1361,7 +1500,8 @@ Object.assign(LC.STR.ar, {
         const c = queue.shift();
         const doneN = deck.length - queue.length - 1;
         ctx.where((doneN + 1) + '/' + deck.length + (pass > 1 ? ' (2)' : ''));
-        const q = LC.q.typed(ctx, c, LC.t('typeIt') + (pass > 1 ? ' · ↻' : ''), (ok) => {
+        const gap = Math.random() < 0.4 ? LC.q.gapFor(ctx, c) : null;
+        const q = LC.q.typed(ctx, c, LC.t(gap ? 'gapType' : 'typeIt') + (pass > 1 ? ' · ↻' : ''), (ok) => {
           if (ok) {
             if (pass === 1 && !missed.has(c.id)) { firstRight.add(c.id); M.set(c.id, M.get(c.id) >= 1 ? 2 : 1); }
           } else {
@@ -1369,7 +1509,7 @@ Object.assign(LC.STR.ar, {
             if (pass > 1) queue.push(c); // keep it until it is typed right once
           }
           ask();
-        });
+        }, gap);
         root.replaceChildren(
           h('div.hud', h('span', h('b', (doneN + 1) + ' / ' + deck.length)), h('span', '✓ ' + firstRight.size + '  ✗ ' + missed.size)),
           LC.ui.progress(doneN, deck.length), q);
